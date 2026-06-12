@@ -146,29 +146,53 @@
 </div>
 
 <script>
+    // بيانات المدن
     const citiesData = {
         'Ras Gharib': { name: 'رأس غارب', lat: 28.2322, lon: 32.7900, zoom: 10, areaName: 'أودية رأس غارب' },
         'Hurghada': { name: 'الغردقة', lat: 27.0781, lon: 33.5758, zoom: 10, areaName: 'أودية الغردقة' },
         'Safaga': { name: 'سفاجا', lat: 26.7892, lon: 33.5781, zoom: 10, areaName: 'أودية سفاجا' }
     };
     
+    // المتغيرات العامة
     let map, currentCity = 'Ras Gharib', currentRisk = 0, currentBoundaryLayer = null, lastAlertLevel = 0, riskHistory = [];
     let riskChart = null, forecastChart = null;
     const ALERT_THRESHOLD = 3;
     
+    // عناصر DOM
     const alertBar = document.getElementById('alertBar');
     const alertLog = document.getElementById('alertLog');
     const riskCard = document.getElementById('riskCard');
     const riskGauge = document.getElementById('riskGauge');
     
-    async function loadGeoJSON(cityKey) {
+    // دالة تحميل ملف GeoJSON (محسنة لتعمل مع GitHub Pages)
+    async function loadGeoJSON(cityName) {
+        // تحديد اسم المجلد حسب المدينة
+        let folderName = '';
+        if (cityName === 'Ras Gharib') folderName = 'ras_gharib';
+        else if (cityName === 'Hurghada') folderName = 'hurghada';
+        else if (cityName === 'Safaga') folderName = 'safaga';
+        else return null;
+        
+        const url = `geojson/${folderName}/watershed_boundary.geojson`;
+        console.log(`🔍 جاري تحميل: ${url}`);
+        
         try {
-            const response = await fetch(`geojson/${cityKey.toLowerCase()}/watershed_boundary.geojson`);
-            if (response.ok) return await response.json();
-        } catch(e) { console.log('No GeoJSON for', cityKey); }
-        return null;
+            const response = await fetch(url);
+            console.log(`📡 HTTP Status: ${response.status}`);
+            if (!response.ok) {
+                console.error(`❌ فشل تحميل ${cityName}: ${response.status}`);
+                return null;
+            }
+            const data = await response.json();
+            console.log(`✅ تم تحميل ${cityName} بنجاح، عدد المعالم: ${data.features ? data.features.length : 0}`);
+            return data;
+        } catch (error) {
+            console.error(`❌ خطأ في تحميل ${cityName}:`, error);
+            return null;
+        }
     }
     
+    // دالة إضافة إنذار إلى السجل
     function addAlertToLog(cityName, riskScore, message) {
         const now = new Date();
         const timeStr = now.toLocaleTimeString('ar-EG');
@@ -179,6 +203,7 @@
         if (riskScore >= ALERT_THRESHOLD) playAlertSound();
     }
     
+    // دالة تشغيل صوت الإنذار
     function playAlertSound() {
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -194,11 +219,13 @@
         } catch(e) { console.log('Audio not supported'); }
     }
     
+    // تحديث لون الخلفية حسب مستوى الخطر
     function updateBodyBackground(riskScore) {
         document.body.classList.remove('risk-level-1', 'risk-level-2', 'risk-level-3', 'risk-level-4', 'risk-level-5');
         if (riskScore >= 1) document.body.classList.add(`risk-level-${riskScore}`);
     }
     
+    // تحديث الرسم البياني لمستوى الخطر
     function updateRiskChart() {
         if (!riskChart) {
             const ctx = document.getElementById('riskChart').getContext('2d');
@@ -214,6 +241,7 @@
         riskChart.update();
     }
     
+    // تحديث الرسم البياني للتنبؤ
     function updateForecastChart(forecastData, cityName) {
         const hourlyTime = forecastData.hourly.time;
         const hourlyTemp = forecastData.hourly.temperature_2m;
@@ -246,6 +274,7 @@
         });
     }
     
+    // تحديث حالة الإنذار
     function updateAlertStatus(cityName, riskScore) {
         document.getElementById('riskProgressBar').style.width = `${(riskScore / 5) * 100}%`;
         const progressColors = ['#2ecc71', '#f1c40f', '#f39c12', '#e67e22', '#e74c3c'];
@@ -277,6 +306,7 @@
         }
     }
     
+    // لون حدود الحوض حسب مستوى الخطر
     function getBoundaryColor(riskScore) {
         if (riskScore >= 4) return '#e74c3c';
         if (riskScore >= 3) return '#e67e22';
@@ -284,18 +314,24 @@
         return '#2ecc71';
     }
     
+    // تحميل وعرض حدود الحوض
     async function loadBoundaryLayer(cityId, riskScore = currentRisk) {
         if (currentBoundaryLayer) map.removeLayer(currentBoundaryLayer);
         const data = await loadGeoJSON(cityId);
-        if (!data) return;
+        if (!data) {
+            console.warn(`⚠️ لم يتم العثور على بيانات GeoJSON لـ ${cityId}`);
+            return;
+        }
         const boundaryColor = getBoundaryColor(riskScore);
         try {
             currentBoundaryLayer = L.geoJSON(data, {
                 style: { color: boundaryColor, weight: 3, fillColor: boundaryColor, fillOpacity: 0.15 }
             }).addTo(map);
-        } catch(e) { console.error('Boundary error:', e); }
+            console.log(`✅ تم عرض حدود الحوض لـ ${cityId}`);
+        } catch(e) { console.error('خطأ في عرض GeoJSON:', e); }
     }
     
+    // تحديث الخريطة عند تغيير المدينة
     function updateMap(cityId) {
         const city = citiesData[cityId];
         if (!city) return;
@@ -305,6 +341,7 @@
         loadBoundaryLayer(cityId, currentRisk);
     }
     
+    // جلب بيانات الطقس
     async function fetchWeather(cityId) {
         const city = citiesData[cityId];
         ['tempValue', 'humidityValue', 'rainValue', 'windValue'].forEach(id => document.getElementById(id).innerHTML = '<span class="loading"></span>');
@@ -354,6 +391,7 @@
         } catch (error) { console.error('Error fetching weather:', error); }
     }
     
+    // تبديل المدينة
     function switchCity(cityId) {
         currentCity = cityId;
         document.querySelectorAll('.city-btn').forEach(btn => { btn.classList.remove('active'); if (btn.getAttribute('data-city') === cityId) btn.classList.add('active'); });
@@ -361,6 +399,7 @@
         fetchWeather(cityId);
     }
     
+    // تهيئة الخريطة
     function initMap() {
         const city = citiesData[currentCity];
         map = L.map('riskMap').setView([city.lat, city.lon], city.zoom);
@@ -372,7 +411,10 @@
         loadBoundaryLayer(currentCity, currentRisk);
     }
     
+    // ربط الأزرار بالأحداث
     document.querySelectorAll('.city-btn').forEach(btn => btn.addEventListener('click', () => switchCity(btn.getAttribute('data-city'))));
+    
+    // بدء التطبيق
     window.addEventListener('load', () => { initMap(); fetchWeather('Ras Gharib'); });
 </script>
 </body>
