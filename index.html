@@ -25,6 +25,55 @@
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         @keyframes circlePulse { 0% { filter: drop-shadow(0 0 0px rgba(231, 76, 60, 0)); } 100% { filter: drop-shadow(0 0 20px rgba(231, 76, 60, 0.8)); } }
         @keyframes alertFlash { 0% { background: #e74c3c; } 100% { background: #c0392b; } }
+
+        /* تنسيق رسالة التوجيه */
+        .orientation-hint {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            left: auto;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            color: #ffd700;
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,215,0,0.3);
+            direction: rtl;
+            font-family: 'Cairo', sans-serif;
+            pointer-events: auto;
+            transition: opacity 0.5s ease;
+        }
+        .orientation-hint button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0 5px;
+            border-radius: 20px;
+            line-height: 1;
+        }
+        .orientation-hint button:hover {
+            background: rgba(255,255,255,0.4);
+        }
+        @media (max-width: 768px) {
+            .orientation-hint {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                padding: 8px 12px;
+                font-size: 0.75rem;
+                text-align: center;
+                justify-content: center;
+            }
+        }
         
         .dashboard { max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
         .header { text-align: center; margin-bottom: 40px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 20px; backdrop-filter: blur(10px); }
@@ -89,8 +138,28 @@
         .full-width { grid-column: span 2; }
         @media (max-width: 768px) { .full-width { grid-column: span 1; } }
         
-        canvas { max-height: 200px !important; width: 100% !important; }
-        @media (max-width: 768px) { canvas { max-height: 150px !important; } }
+        /* تحسين حجم الرسم البياني على الكمبيوتر والهاتف */
+        @media (min-width: 769px) {
+            canvas { 
+                max-height: 450px !important; 
+                width: 100% !important; 
+            }
+            #forecastChart {
+                min-height: 400px !important;
+                max-height: 500px !important;
+            }
+        }
+        
+        @media (max-width: 768px) { 
+            canvas { 
+                max-height: 200px !important; 
+                width: 100% !important; 
+            }
+            #forecastChart {
+                min-height: 250px !important;
+                max-height: 300px !important;
+            }
+        }
         
         @media (max-width: 480px) {
             body { padding: 10px; }
@@ -103,10 +172,20 @@
             .city-btn { padding: 6px 12px; font-size: 0.7rem; }
             .legend { font-size: 8px; padding: 4px 8px; }
             .footer { font-size: 0.5rem; }
+            #forecastChart {
+                min-height: 220px !important;
+                max-height: 260px !important;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- ✅ إضافة رسالة التوجيه للهواتف -->
+    <div id="orientationHint" class="orientation-hint" style="display: none;">
+        <span>📱 للحصول على عرض أفضل للرسوم البيانية، يُفضل تدوير الشاشة إلى الوضع الأفقي.</span>
+        <button id="closeHintBtn">✖</button>
+    </div>
+
     <div id="alertBar" class="alert-bar">⚠️ تحذير: خطر سيول محتمل! ⚠️</div>
 
 <div class="dashboard">
@@ -170,6 +249,29 @@
 </div>
 
 <script>
+    (function() {
+        const hintDiv = document.getElementById('orientationHint');
+        const closeBtn = document.getElementById('closeHintBtn');
+        
+        function dismissHintPermanently() {
+            if (hintDiv) hintDiv.style.display = 'none';
+            localStorage.setItem('orientationHintDismissed', 'true');
+        }
+        
+        if (window.innerWidth <= 768 && localStorage.getItem('orientationHintDismissed') !== 'true') {
+            if (hintDiv) hintDiv.style.display = 'flex';
+            setTimeout(() => {
+                if (hintDiv && hintDiv.style.display === 'flex') {
+                    hintDiv.style.display = 'none';
+                }
+            }, 8000);
+        }
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', dismissHintPermanently);
+        }
+    })();
+
     const citiesData = {
         'Ras Gharib': { name: 'رأس غارب', lat: 28.2322, lon: 32.7900, zoom: 10, areaName: 'أودية رأس غارب' },
         'Hurghada': { name: 'الغردقة', lat: 27.0781, lon: 33.5758, zoom: 10, areaName: 'أودية الغردقة' },
@@ -243,8 +345,8 @@
         if (!riskChart) {
             const ctx = document.getElementById('riskChart').getContext('2d');
             riskChart = new Chart(ctx, {
-                type: 'line', data: { labels: [], datasets: [{ label: 'مستوى الخطر', data: [], borderColor: '#e94560', backgroundColor: 'rgba(233,69,96,0.1)', fill: true, tension: 0.3, pointBackgroundColor: '#e94560', pointRadius: 4 }] },
-                options: { responsive: true, maintainAspectRatio: true, scales: { y: { min: 0, max: 5, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { stepSize: 1, color: '#fff' } }, x: { ticks: { color: '#fff', maxRotation: 45, autoSkip: true } } }, plugins: { legend: { labels: { color: '#fff' } } } }
+                type: 'line', data: { labels: [], datasets: [{ label: 'مستوى الخطر', data: [], borderColor: '#e94560', backgroundColor: 'rgba(233,69,96,0.1)', borderWidth: 3, fill: true, tension: 0.3, pointBackgroundColor: '#e94560', pointRadius: 5, pointHoverRadius: 7 }] },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { min: 0, max: 5, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { stepSize: 1, color: '#fff', font: { size: isMobile ? 10 : 12 } } }, x: { ticks: { color: '#fff', font: { size: isMobile ? 8 : 10 }, maxRotation: 45, autoSkip: true } } }, plugins: { legend: { labels: { color: '#fff', font: { size: isMobile ? 10 : 12 } } } } }
             });
         }
         riskHistory.push(currentRisk);
@@ -279,10 +381,24 @@
         forecastChart = new Chart(ctx, {
             type: 'line',
             data: { labels: dailyLabels, datasets: [
-                { label: 'درجة الحرارة (°C)', data: dailyTemps, borderColor: '#e94560', backgroundColor: 'rgba(233, 69, 96, 0.1)', borderWidth: 2, fill: true, tension: 0.3, pointBackgroundColor: '#e94560', pointRadius: 4, pointHoverRadius: 6, yAxisID: 'y' },
-                { label: 'هطول الأمطار (mm)', data: dailyPrecip, borderColor: '#4ecdc4', backgroundColor: 'rgba(78, 205, 196, 0.1)', borderWidth: 2, fill: true, tension: 0.3, pointBackgroundColor: '#4ecdc4', pointRadius: 4, pointHoverRadius: 6, yAxisID: 'y1' }
+                { label: '🌡️ درجة الحرارة (°C)', data: dailyTemps, borderColor: '#e94560', backgroundColor: 'rgba(233, 69, 96, 0.1)', borderWidth: 3, fill: true, tension: 0.3, pointBackgroundColor: '#e94560', pointRadius: 6, pointHoverRadius: 8, yAxisID: 'y' },
+                { label: '🌧️ هطول الأمطار (mm)', data: dailyPrecip, borderColor: '#4ecdc4', backgroundColor: 'rgba(78, 205, 196, 0.1)', borderWidth: 3, fill: true, tension: 0.3, pointBackgroundColor: '#4ecdc4', pointRadius: 6, pointHoverRadius: 8, yAxisID: 'y1' }
             ] },
-            options: { responsive: true, maintainAspectRatio: true, interaction: { mode: 'index', intersect: false }, plugins: { tooltip: { enabled: true }, legend: { position: isMobile ? 'bottom' : 'top', labels: { font: { size: isMobile ? 10 : 12 } } }, title: { display: true, text: `توقعات الطقس لـ ${cityName} - الأيام القادمة`, color: '#fff', font: { size: isMobile ? 12 : 14 } } }, scales: { x: { ticks: { font: { size: isMobile ? 8 : 10 }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.1)' } }, y: { position: 'right', title: { display: true, text: 'درجة الحرارة (°C)', color: '#e94560', font: { size: isMobile ? 8 : 10 } }, ticks: { color: '#e94560', font: { size: isMobile ? 8 : 10 } }, grid: { color: 'rgba(233, 69, 96, 0.2)' } }, y1: { position: 'left', title: { display: true, text: 'الأمطار (mm)', color: '#4ecdc4', font: { size: isMobile ? 8 : 10 } }, ticks: { color: '#4ecdc4', font: { size: isMobile ? 8 : 10 } }, grid: { drawOnChartArea: false } } } }
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: { enabled: true, titleColor: '#fff', bodyColor: '#ddd', backgroundColor: 'rgba(0,0,0,0.8)', borderColor: '#e94560', borderWidth: 1 },
+                    legend: { position: isMobile ? 'bottom' : 'top', labels: { color: '#fff', font: { size: isMobile ? 12 : 14, weight: 'bold' }, usePointStyle: true, boxWidth: 12 } },
+                    title: { display: true, text: `📊 توقعات الطقس لـ ${cityName} (7 أيام قادمة)`, color: '#fff', font: { size: isMobile ? 12 : 16, weight: 'bold' }, padding: { bottom: 10 } }
+                },
+                scales: {
+                    x: { ticks: { color: '#a0c4ff', font: { size: isMobile ? 9 : 12, weight: 'bold' }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.1)' }, title: { display: true, text: 'التاريخ', color: '#a0c4ff', font: { size: isMobile ? 9 : 11 } } },
+                    y: { position: 'right', title: { display: true, text: 'درجة الحرارة (°C)', color: '#e94560', font: { size: isMobile ? 9 : 12, weight: 'bold' } }, ticks: { color: '#e94560', font: { size: isMobile ? 9 : 12, weight: 'bold' } }, grid: { color: 'rgba(233, 69, 96, 0.2)' } },
+                    y1: { position: 'left', title: { display: true, text: 'هطول الأمطار (mm)', color: '#4ecdc4', font: { size: isMobile ? 9 : 12, weight: 'bold' } }, ticks: { color: '#4ecdc4', font: { size: isMobile ? 9 : 12, weight: 'bold' } }, grid: { drawOnChartArea: false } }
+                }
+            }
         });
     }
     
